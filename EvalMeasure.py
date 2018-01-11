@@ -8,7 +8,7 @@ import numpy as np
 import sys
 import matplotlib.pyplot as plt
 from Weighter import Binary, TF, TF_IDF, Log, Log_plus
-from IRmodel import Vectoriel, Okapi, LanguageModel, RankModel, HitsModel, MetaModel
+from IRmodel import Vectoriel, Okapi, LanguageModel, RankModel, HitsModel, MetaModel, KMeans_diversity
 from ParserCLEF08 import ParserCLEF08
 from TextRepresenter import PorterStemmer
 from collections import defaultdict
@@ -195,6 +195,9 @@ class EvalIRModel(object):
             
         elif model_type == "Hits":
             self.models = [HitsModel(self.Index)]
+        
+        elif model_type == "KMeans_diversity":
+            self.models = [KMeans_diversity(self.Index,15)]
             
         elif model_type == "MetaModel":
             """Learning a linear combination of 4 models"""

@@ -109,7 +109,7 @@ class LanguageModel(IRmodel):
         self.l_term = lissage_term
         self.Index = Index
         self.corpus_size = float(Index.total_corpus_size) 
-        
+
         #pre-compute corpus language model
         self.corpus_prob = {}
         for stem in self.Index.stems.keys():
@@ -345,3 +345,37 @@ class MetaModel(IRmodel):
         # Done with training the model
         print "Training achieved with Grad_theta < ",eps," !"
         print "Number of queries required :",query_nb
+        
+    
+    
+    
+class KMeans_diversity(IRmodel):
+    def __init__(self,Index,K):
+        #init ranking model
+        print type(Index)
+        print Index.total_corpus_size
+        self.ranking_model = LanguageModel(Index,0.2)
+        self.Index = Index
+        self.nb_clusters = K
+    
+    def getName(self):
+        return "KMeans_diversity"
+        
+    def getIndex(self):
+        return self.Index
+        
+    def getRanking(self,query):
+        #first compute rank using ranking model
+        doc_ranking = self.ranking_model.getRanking(query)
+        
+        return doc_ranking        
+        #now cluster on retrived doc
+        
+       
+        
+        
+    
+        
+        
+    
+        
