@@ -118,17 +118,19 @@ class Eval_CR_N(EvalMeasure):
         
     def evaluation(self, Query, retrieved_doc):
         
-        relevant_doc = set(np.array(Query.getRelevantDocs())[:,2])
-        relevant_doc_subtopics = None
+        relevant_doc = np.array(Query.getRelevantDocs())[:,0]
+        relevant_doc_subtopics = np.array(Query.getRelevantDocs())[:,2]
         #get all subpics from above
         
-        retrieved = np.array( retrieved_doc ,dtype=int)[:,2][:self.N]
-        retrieved_subtopics = None
-        #get all subpics from retrived
+        top_N_retrieved = np.array( retrieved_doc ,dtype=int)[:,0][:self.N]
+        retrieved_subtopics = set()
         
-        N_subtopics = float(len(relevant_doc_subtopics))
-        numerator = self.getNumRecall(relevant_doc_subtopics, retrieved_subtopics)
-        return  numerator /N_subtopics # simple precision meas.
+        found_docs = intersection(relevant_doc,top_N_retrieved)
+        for doc in found_docs:
+            ind = np.where(relevant_doc == doc)[0][0]
+            retrieved_subtopics.add(relevant_doc_subtopics[ind])
+            
+        return  len(retrieved_subtopics) / float(len(set(relevant_doc_subtopics)))
 
 class Eval_AP(EvalMeasure):
     """Class for query evaluation using average precision-recall""" 
@@ -258,7 +260,7 @@ class EvalIRModel(object):
                     continue
                 
                 removeUnknownStems(Q, self.Index)
-                print "query results", query_result
+                #print "query results", query_result
                 query_result = m.getRanking(Q.getTf())
                 prec = Eval.evaluation(Q, query_result)
                 #cr = 
@@ -267,12 +269,12 @@ class EvalIRModel(object):
                 #accumulate results
                 if not models_prec.has_key(m_name):
                     models_prec[m_name] = Eval.evaluation(Q, query_result)
-                    #models_CR[m_name] = Eval_CR.evaluation(Q, query_result)
+                    models_CR[m_name] = Eval_CR.evaluation(Q, query_result)
                     models_AP[m_name] = EvalAP.evaluation(Q, query_result)
                 else:
                     
                     models_prec[m_name] += np.array(prec)
-                    #models_CR[m_name] += Eval_CR.evaluation(Q, query_result)
+                    models_CR[m_name] += Eval_CR.evaluation(Q, query_result)
                     models_AP[m_name] += EvalAP.evaluation(Q, query_result)
 
                 Q = self.query_parser.nextQuery()
@@ -283,6 +285,7 @@ class EvalIRModel(object):
                 #self.plot_(models_recall[m_name], models_inter_prec[m_name], models_prec[m_name])
                 print 'AP: ',  models_AP[m_name]/query_nb
                 print 'P@',self.N," : ",models_prec[m_name]/query_nb
+                print 'CR@',self.N," : ",models_CR[m_name]/query_nb
             
         return models_prec, models_CR, models_AP
         
