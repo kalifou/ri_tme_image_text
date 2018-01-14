@@ -175,9 +175,9 @@ class EvalIRModel(object):
         plt.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
         plt.show()
         
-    def __init__(self, N, index_file, query_file, relevance_file,model_type="Vectoriel"):
+    def __init__(self, N, index_file, query_file, relevance_file,model_type="Vectoriel",div_K=None,div_N=None,eval_N=20):
         """ model_type = Vectoriel | Okapi | Language | PageRank | MetaModel """
-        self.N= N
+        self.N= eval_N
         self.Index = initIndex(index_file)
         
         if model_type  == "Vectoriel":
@@ -197,7 +197,7 @@ class EvalIRModel(object):
             self.models = [HitsModel(self.Index)]
         
         elif model_type == "KMeans_diversity":
-            self.models = [KMeans_diversity(self.Index,15)]
+            self.models = [KMeans_diversity(self.Index,div_K,div_N)]
             
         elif model_type == "MetaModel":
             """Learning a linear combination of 4 models"""
@@ -282,13 +282,15 @@ class EvalIRModel(object):
 
                 Q = self.query_parser.nextQuery()
                 query_nb += 1
-               
+            models_AP[m_name] = models_AP[m_name]/query_nb
+            models_CR[m_name] = models_CR[m_name]/query_nb
+            models_prec[m_name] = models_prec[m_name]/query_nb
                        
             if verbose:
                 #self.plot_(models_recall[m_name], models_inter_prec[m_name], models_prec[m_name])
-                print 'AP: ',  models_AP[m_name]/query_nb
-                print 'P@',self.N," : ",models_prec[m_name]/query_nb
-                print 'CR@',self.N," : ",models_CR[m_name]/query_nb
+                print 'AP: ',  models_AP[m_name]
+                print 'P@',self.N," : ",models_prec[m_name]
+                print 'CR@',self.N," : ",models_CR[m_name]
             
         return models_prec, models_CR, models_AP
         

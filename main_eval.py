@@ -15,7 +15,7 @@ if __name__ == "__main__":
     query_file = "easyCLEF08/easyCLEF08_query.txt"
     relevance_file = "easyCLEF08/easyCLEF08_gt.txt"
     type = "KMeans_diversity" # model_type = Vectoriel | Okapi | Language | PageRank | Hits | MetaModel
-    eval_platform = EvalIRModel(N,fname,query_file,relevance_file,model_type=type)
+    eval_platform = EvalIRModel(N,fname,query_file,relevance_file,model_type=type,div_K=30,div_N=30)
     simple_eval = False  
     
     if simple_eval :        

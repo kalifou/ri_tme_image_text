@@ -351,7 +351,7 @@ class MetaModel(IRmodel):
     
     
 class KMeans_diversity(IRmodel):
-    def __init__(self,Index,K,N=50):
+    def __init__(self,Index,K,N=30):
         #init ranking model
         print type(Index)
         print Index.total_corpus_size
@@ -366,44 +366,57 @@ class KMeans_diversity(IRmodel):
     def getIndex(self):
         return self.Index
     
+    #cluster order : decreasing number of docs
+    #document order: rank
     def diversity_ranking(self,doc_ranking,doc_clusters):
         doc_ranking = np.array(doc_ranking)
         doc_clusters = np.array(doc_clusters)
         
+        clusters = []
         for cluster_id in range(self.nb_clusters):
             #get every doc index from this cluster
             doc_inds = np.where(doc_clusters == cluster_id)[0]
-            sorted_clusters[cluster_id] = sorted(doc_ranking[doc_inds], key=lambda tup: tup[1],reverse=True)
+            clusters.append((sorted(doc_ranking[doc_inds], key=lambda tup: tup[1],reverse=True),len(doc_inds)))
         
-        sorted_clusters = {}
+        #sort clusters in decreasing order of their length
+        sorted_clusters = sorted(clusters, key=lambda tup: tup[1],reverse=True)
         
-        #TODO
         #now generate final ranked+diversity list
+        final_ranking = []
+        
+        while(len(sorted_clusters) > 0):
+            for i,cluster in enumerate(sorted_clusters):
+                if cluster[0] == []:
+                    sorted_clusters.pop(i)
+                    continue
+                final_ranking.append(cluster[0].pop(0))
+        return final_ranking
+        
         
     def getRanking(self,query):
         #first compute rank using ranking model
         doc_ranking = self.ranking_model.getRanking(query)
         #return doc_ranking        
         
-        #now cluster on retrieved doc
+        #now cluster on top N retrieved doc
         stem_list = self.Index.stems.keys()
         index_P = { id:idx for idx,id in enumerate(stem_list)}
         #counter_index_P = { idx:id for idx,id in enumerate(stem_list)}
         
         #generate data
-        data = np.zeros([len(doc_ranking),len(stem_list)])
-        for doc_index,doc_id in enumerate(doc_ranking):
+        data = np.zeros([len(doc_ranking[:self.N]),len(stem_list)])
+        for doc_index,doc_id in enumerate(doc_ranking[:self.N]):
             doc_tf = self.Index.getTfsForDoc(str(doc_id[0]))
             for stem,nb_occur in doc_tf.items():
                 data[doc_index][index_P[stem]] = nb_occur
         
         #run kmeans
         kmeans = KMeans(n_clusters=self.nb_clusters, random_state=0).fit(data)
-        print kmeans.labels_
+        #print kmeans.labels_
         
-        final_ranking = diversity_ranking(doc_ranking,doc_clusters)
+        top_N_ranking = self.diversity_ranking(doc_ranking[:self.N],kmeans.labels_)
         
-        return doc_ranking
+        return top_N_ranking + doc_ranking[self.N:]
         
        
         
