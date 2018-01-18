@@ -121,28 +121,31 @@ class LanguageModel(IRmodel):
         return self.Index
     
     def getName(self):
-        return "Language Model"
-    
+        return "Language"
+        
+    def compute_score(self,query,doc_tfs):
+        """Compute relevancy score of doc2 on query (query could be a doc since queries and docs are just tf dicts)"""
+        doc_score = 0
+        doc_length = sum(doc_tfs.values())
+        for q_stem,q_tf in query.items():
+            #add corpus prob in any case
+            in_log = (1 - self.l_term) * self.corpus_prob[q_stem]
+            #add doc prob if stem in current doc
+            if doc_tfs.has_key(str(q_stem)):    
+                in_log += self.l_term * (doc_tfs[str(q_stem)] / float(doc_length))
+                #print in_log
+            if in_log < 0:
+                print "SHOOOOOOOOOULD NOT HAPPEN"
+            doc_score += q_tf * np.log(in_log)
+        if doc_score == 0:
+            print "ERROR SCORE = 0, EVERY DOC SHOULD HAVE A NEG SCORE"
+        return doc_score
+        
     def getScores(self,query):
         """Calculating a score for all documents with respect to the stems of query """
         doc_scores = {}
         for doc_id in self.Index.docFrom.keys():
-            doc_score = 0
-            doc_tfs = self.Index.getTfsForDoc(doc_id)
-            doc_length = sum(doc_tfs.values())
-            for q_stem,q_tf in query.items():
-                #add corpus prob in any case
-                in_log = (1 - self.l_term) * self.corpus_prob[q_stem]
-                #add doc prob if stem in current doc
-                if doc_tfs.has_key(str(q_stem)):    
-                    in_log += self.l_term * (doc_tfs[str(q_stem)] / float(doc_length))
-                    #print in_log
-                if in_log < 0:
-                    print "SHOOOOOOOOOULD NOT HAPPEN"
-                doc_score += q_tf * np.log(in_log)
-            if doc_score == 0:
-                print "ERROR SCORE = 0, EVERY DOC SHOULD HAVE A NEG SCORE"
-            doc_scores[int(doc_id)] = doc_score
+            doc_scores[int(doc_id)] = self.compute_score(query,self.Index.getTfsForDoc(doc_id))         
         return doc_scores
                     
 class Okapi(IRmodel):
@@ -366,9 +369,9 @@ class KMeans_diversity(IRmodel):
     def getIndex(self):
         return self.Index
     
-    #cluster order : decreasing number of docs
+    #cluster order : decreasing number of docs OR cluster rank
     #document order: rank
-    def diversity_ranking(self,doc_ranking,doc_clusters):
+    def diversity_ranking(self,doc_ranking,doc_clusters,cluster_ranking_method='dec_cluster_size'):
         doc_ranking = np.array(doc_ranking)
         doc_clusters = np.array(doc_clusters)
         
@@ -377,9 +380,16 @@ class KMeans_diversity(IRmodel):
             #get every doc index from this cluster
             doc_inds = np.where(doc_clusters == cluster_id)[0]
             clusters.append((sorted(doc_ranking[doc_inds], key=lambda tup: tup[1],reverse=True),len(doc_inds)))
+            
+            if cluster_ranking_method == 'cluster_max_rank':
+                #sort clusters according to max relevant score
+                sorted_clusters = sorted(clusters, key=lambda tup: tup[0][0][1] if tup[1] > 0 else -sys.maxint,reverse=True)
+                
         
-        #sort clusters in decreasing order of their length
-        sorted_clusters = sorted(clusters, key=lambda tup: tup[1],reverse=True)
+            else: #cluster_ranking_method == 'dec_cluster_size':
+                #sort clusters in decreasing order of their length
+                sorted_clusters = sorted(clusters, key=lambda tup: tup[1],reverse=True)
+        
         
         #now generate final ranked+diversity list
         final_ranking = []
@@ -414,9 +424,61 @@ class KMeans_diversity(IRmodel):
         kmeans = KMeans(n_clusters=self.nb_clusters, random_state=0).fit(data)
         #print kmeans.labels_
         
-        top_N_ranking = self.diversity_ranking(doc_ranking[:self.N],kmeans.labels_)
+        top_N_ranking = self.diversity_ranking(doc_ranking[:self.N],kmeans.labels_)#,cluster_ranking_method='cluster_max_rank')
         
         return top_N_ranking + doc_ranking[self.N:]
+        
+    
+class Greedy_diversity(IRmodel):
+    def __init__(self,Index,alpha=0.7,N=30):
+        #init ranking model
+        self.ranking_model = LanguageModel(Index,0.2)
+        self.Index = Index
+        
+        self.alpha = alpha
+        self.N = N
+    
+    def getName(self):
+        return "Greedy_diversity"
+        
+    def getIndex(self):
+        return self.Index
+        
+    def getRanking(self,query):
+        #first compute rank using ranking model
+        doc_ranking = self.ranking_model.getRanking(query)
+        
+        #first document is the most pertinent
+        hinge = [doc_ranking[0]]
+        
+        unordered_docs = list(doc_ranking[1:self.N])
+        for rank_idx in range(1,self.N):
+            
+            max_score = -sys.maxint
+            max_doc = -1
+            for doc_id,relev_score in unordered_docs:
+                #computes similarity with docs in hinge (MAX similarity)
+                max_sim = -sys.maxint
+                for hinge_doc_id,_ in hinge:
+                    #similarity between doc computed with language model method
+                    sim = self.ranking_model.compute_score(self.Index.getTfsForDoc(str(hinge_doc_id)),self.Index.getTfsForDoc(str(doc_id)))
+                    if sim > max_sim:
+                        max_sim = sim
+
+                assert(max_sim != -sys.maxint)
+                score = (self.alpha * relev_score) - ((1-self.alpha) * max_sim)
+                if score > max_score:
+                    max_score = score
+                    max_doc = (doc_id,relev_score)
+                assert(max_score != -sys.maxint)
+            
+            #doc with max score is next in ranking
+            hinge.append(max_doc)
+            #remove it from remaining docs
+            unordered_docs.pop(unordered_docs.index(max_doc))
+        assert(len(unordered_docs) == 0)
+        #create top N ranking using original doc scores
+        return hinge + doc_ranking[self.N:]
         
        
         
