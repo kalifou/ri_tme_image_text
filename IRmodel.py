@@ -480,11 +480,98 @@ class Greedy_diversity(IRmodel):
         #create top N ranking using original doc scores
         return hinge + doc_ranking[self.N:]
         
-       
+
+def Cos_Distance(u,v):
+        u_keys = u.keys()
+        #print u_keys
+        dist = 0.
+        for e in u_keys:
+            dist += (u[e]-v.get(e,0.0))**2            
+        return np.sqrt(dist)
         
+class Greedy_diversity_euclidian(IRmodel):
+    
+    def __init__(self,Index,alpha=0.7,N=30):
+        #init ranking model
+        #LanguageModel(Index,0.2)
+        self.weighter = Log_plus(Index)
+        self.ranking_model = Euclidian_model(Index, self.weighter)
+        self.Index = Index
+        
+        self.alpha = alpha
+        self.N = N
+        
+    def getName(self):
+        return "Greedy_diversity_euclidian"
+        
+    def getIndex(self):
+        return self.Index
+        
+    def getRanking(self,query):
+        CST = 32.
+        #first compute rank using ranking model
+        doc_ranking = self.ranking_model.getRanking(query)
+        
+        #first document is the most pertinent
+        hinge = [doc_ranking[0]]
+        hinge_doc_id,_ = hinge[0]
+        du = self.weighter.getDocWeightsForDoc(str(hinge_doc_id)) 
+        #print "hinge doc :", hinge_doc_id
+        K = self.N
+        unordered_docs = list(doc_ranking[1:K])
+        for rank_idx in range(1,K):
+            
+            max_score = -sys.maxint
+            max_doc = -1
+            
+            for doc_id, relev_score in unordered_docs:
+                #computes similarity with docs in hinge (MAX similarity)
+                di = self.weighter.getDocWeightsForDoc(str(doc_id))
+                #relev_score_ = 1 - self.Cos_Distance(di,query)/CST
+                sim_phi = 0.0
+                for hinge_doc_id,_ in hinge:
+                    # Using euclidian distance                                       
+                    sim = -Cos_Distance(du,di)/CST  
+                    #print "sim :", sim
+                    sim_phi += sim
+                    #print "sim :",sim
+                denom = len(hinge)
+                #print "sim/denom, rel_score :",sim_phi/denom,relev_score
+                score = (self.alpha * relev_score ) - ((1-self.alpha) * sim_phi / denom)
+                #print("score :",score)
+                if score > max_score:
+                    max_score = score
+                    max_doc = (doc_id,relev_score) #relev_score)
+                assert(max_score != -sys.maxint)
+            
+            #doc with max score is next in ranking            
+            hinge.append(max_doc)
+            #remove it from remaining docs
+            unordered_docs.pop(unordered_docs.index(max_doc))
+        assert(len(unordered_docs) == 0)
+        #create top N ranking using original doc scores
+        return hinge + doc_ranking[self.N:]      
         
     
+class Euclidian_model(IRmodel):
+
+    def __init__(self, Index,Weighter):
+        self.Weighter = Weighter
+        self.Index = Index
+
+    def getName(self):
+        return "Euclidian_model"
         
+    def getIndex(self):
+        return self.Weighter.Index
         
+    def getScores(self,query):
+        """Calculating a score for all documents with respect to the stems of query """
+        doc_scores = {}
+        for doc_id in self.Index.docFrom.keys():
+            di = self.Weighter.getDocWeightsForDoc(str(doc_id))
+            q_=self.Weighter.getWeightsForQuery(query)
+            doc_scores[int(doc_id)] = 1-Cos_Distance(q_,di)/32.       
+        return doc_scores
     
         

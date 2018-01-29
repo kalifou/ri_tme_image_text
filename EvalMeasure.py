@@ -8,7 +8,7 @@ import numpy as np
 import sys
 import matplotlib.pyplot as plt
 from Weighter import Binary, TF, TF_IDF, Log, Log_plus
-from IRmodel import Vectoriel, Okapi, LanguageModel, RankModel, HitsModel, MetaModel, KMeans_diversity, Greedy_diversity
+from IRmodel import Vectoriel, Okapi, LanguageModel, RankModel, HitsModel, MetaModel, KMeans_diversity, Greedy_diversity, Greedy_diversity_euclidian,Euclidian_model
 from ParserCLEF08 import ParserCLEF08
 from TextRepresenter import PorterStemmer
 from collections import defaultdict
@@ -71,7 +71,7 @@ def initModels(I,modelType):
         models = pickle.load( open( model_file_name, "rb" ) )
         
     elif modelType == "Vectoriel":
-        weighters = [Binary(I), TF(I), TF_IDF(I), Log(I), Log_plus(I)]
+        weighters =  [Binary(I), TF(I), TF_IDF(I), Log(I), Log_plus(I)]
         models = [Vectoriel(Index,True, w) for w in weighters]
         pickle.dump( models, open( model_file_name, "wb" ) )
     
@@ -181,7 +181,9 @@ class EvalIRModel(object):
         self.Index = initIndex(index_file)
         
         if model_type  == "Vectoriel":
-            self.models = initModels(self.Index,model_type)
+            self.models = [Vectoriel(Index,True, Log_plus(self.Index))] #initModels(self.Index,model_type)
+        elif model_type == "Euclidian_model":
+            self.models = [Euclidian_model(self.Index,Log_plus(self.Index))]
             
         elif model_type == "Language":
             print "Init of Language model"
@@ -201,7 +203,11 @@ class EvalIRModel(object):
         
         elif model_type == "Greedy_diversity":
             self.models = [Greedy_diversity(self.Index,div_K,div_N)]
-       
+            
+        elif model_type == "Greedy_diversity_euclidian":
+            print "alpha, N:", div_K,div_N
+            self.models = [Greedy_diversity_euclidian(self.Index,alpha=div_K, N=div_N)]
+            
         elif model_type == "MetaModel":
             """Learning a linear combination of 4 models"""
             I = self.Index
